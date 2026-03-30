@@ -1,6 +1,6 @@
 window.APP_CONFIG = {
   app: {
-    name: "AKINDELE OKANLAWAN Library",
+    name: "Soul Lesson Library",
     mode: "demo",
   },
   firebase: {
