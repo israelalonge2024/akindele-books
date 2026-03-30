@@ -975,6 +975,11 @@ select:focus {
   .dashboard-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  /* Admin: un-stick the form on smaller screens so it doesn't overlap */
+  .admin-form-card {
+    position: static;
+  }
 }
 
 @media (max-width: 840px) {
@@ -998,6 +1003,13 @@ select:focus {
     grid-template-columns: 1fr;
   }
 
+  /* Admin book cover: full width on single-column layout */
+  .admin-book-cover {
+    min-height: 14rem;
+    width: 100%;
+    border-radius: 1.2rem;
+  }
+
   h1 {
     max-width: 11ch;
   }
@@ -1005,6 +1017,22 @@ select:focus {
   .footer {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  /* Dashboard header: stack vertically so buttons don't overflow */
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dashboard-header .topbar-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  /* Admin form card: remove sticky so it doesn't overlap content */
+  .admin-form-card {
+    position: static;
   }
 }
 
@@ -1040,5 +1068,91 @@ select:focus {
 
   .dashboard-stats {
     grid-template-columns: 1fr;
+  }
+
+  /* Admin shell: reduce top padding on very small screens */
+  .admin-shell {
+    padding-top: 1rem;
+  }
+
+  /* Section heading: tighter on mobile */
+  .section-heading {
+    margin-bottom: 1.25rem;
+  }
+
+  /* Dashboard header actions: full width column stack */
+  .dashboard-header .topbar-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .dashboard-header .topbar-actions .ghost-button,
+  .dashboard-header .topbar-actions .primary-button {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* Admin form: reduce padding for tight screens */
+  .pricing-card.admin-form-card {
+    padding: 1rem;
+  }
+
+  /* Modal actions (Upload + Save buttons): stack vertically */
+  .modal-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .modal-actions .ghost-button,
+  .modal-actions .primary-button {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* Toggle row: stack checkboxes */
+  .toggle-row {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  /* Admin library card: less padding on small screens */
+  .admin-library-card {
+    padding: 1rem;
+  }
+
+  /* Admin book header: stack title + danger button */
+  .admin-book-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  /* Stat card: smaller number on tiny screens */
+  .stat-card strong {
+    font-size: 1.6rem;
+  }
+
+  /* Inputs / textareas: ensure they don't overflow */
+  input,
+  textarea,
+  select {
+    max-width: 100%;
+  }
+
+  /* Membership layout: full width on mobile */
+  .membership-layout {
+    grid-template-columns: 1fr;
+  }
+
+  /* h1 on admin hero: scale down */
+  h1 {
+    font-size: clamp(2.2rem, 9vw, 3.5rem);
+  }
+
+  h2 {
+    font-size: clamp(1.6rem, 6vw, 2.5rem);
   }
 }
