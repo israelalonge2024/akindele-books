@@ -73,7 +73,13 @@ const state = {
   session: getJSON(STORAGE_KEYS.session, null),
   purchases: getJSON(STORAGE_KEYS.purchases, []),
   adminSession: getJSON(STORAGE_KEYS.adminSession, null),
+  adminDraftFiles: {
+    cover: null,
+    pdf: null,
+  },
 };
+
+let activeReaderPdfObjectUrl = null;
 
 function getJSON(key, fallback) {
   try {
@@ -1312,8 +1318,21 @@ function renderAdminBookList() {
               <span>${formatPrice(book)}</span>
               <span>${book.pdfUrl ? "PDF ready" : book.pdfFileName || "No PDF URL yet"}</span>
             </div>
+            <div class="admin-asset-links">
+              ${
+                book.pdfUrl
+                  ? `<a class="admin-asset-link" href="${escapeHtml(book.pdfUrl)}" target="_blank" rel="noopener noreferrer">Saved PDF URL: ${escapeHtml(book.pdfUrl)}</a>`
+                  : '<span class="admin-asset-link">Saved PDF URL: not available yet</span>'
+              }
+              ${
+                book.coverUrl
+                  ? `<a class="admin-asset-link" href="${escapeHtml(book.coverUrl)}" target="_blank" rel="noopener noreferrer">Saved cover URL: ${escapeHtml(book.coverUrl)}</a>`
+                  : '<span class="admin-asset-link">Saved cover URL: not available yet</span>'
+              }
+            </div>
             <div class="book-actions">
               <button class="ghost-button" type="button" data-edit-book="${book.id}">Edit</button>
+              ${book.published ? `<a class="ghost-button button-link" href="./reader.html?id=${encodeURIComponent(book.id)}">Read</a>` : ""}
               <button class="ghost-button" type="button" data-toggle-book="${book.id}">
                 ${book.published ? "Unpublish" : "Publish"}
               </button>
@@ -1334,11 +1353,14 @@ function resetBookForm() {
     return;
   }
 
+  clearAdminDraftFiles();
   form.reset();
   document.getElementById("editingBookId").value = "";
   document.getElementById("bookCurrency").value = "USD";
   document.getElementById("bookPublished").checked = true;
   document.getElementById("bookFormTitle").textContent = "Add a new book";
+  hideAssetConfirmation();
+  updateSelectedFileStatus();
 }
 
 function fillBookForm(bookId) {
@@ -1347,6 +1369,7 @@ function fillBookForm(bookId) {
     return;
   }
 
+  clearAdminDraftFiles();
   document.getElementById("editingBookId").value = book.id;
   document.getElementById("bookTitle").value = book.title;
   document.getElementById("bookAuthor").value = book.author;
@@ -1360,6 +1383,8 @@ function fillBookForm(bookId) {
   document.getElementById("bookFeatured").checked = Boolean(book.featured);
   document.getElementById("bookPublished").checked = Boolean(book.published);
   document.getElementById("bookFormTitle").textContent = `Editing "${book.title}"`;
+  renderAssetConfirmation(book);
+  updateSelectedFileStatus();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -1449,9 +1474,134 @@ async function uploadToCloudinary(file, resourceType) {
   return data.secure_url;
 }
 
+function setUploadStatus(elementId, message) {
+  const element = document.getElementById(elementId);
+  if (element) {
+    element.textContent = message;
+  }
+}
+
+function updateSelectedFileStatus() {
+  const coverFile = state.adminDraftFiles.cover || document.getElementById("bookCoverFile")?.files?.[0];
+  const pdfFile = state.adminDraftFiles.pdf || document.getElementById("bookPdfFile")?.files?.[0];
+
+  setUploadStatus(
+    "coverUploadStatus",
+    coverFile ? `Selected cover: ${coverFile.name}` : "No cover file selected yet."
+  );
+  setUploadStatus(
+    "pdfUploadStatus",
+    pdfFile ? `Selected PDF: ${pdfFile.name}` : "No PDF file selected yet."
+  );
+}
+
+function syncDraftFilesFromInputs() {
+  state.adminDraftFiles.cover = document.getElementById("bookCoverFile")?.files?.[0] || null;
+  state.adminDraftFiles.pdf = document.getElementById("bookPdfFile")?.files?.[0] || null;
+}
+
+function clearAdminDraftFiles() {
+  state.adminDraftFiles.cover = null;
+  state.adminDraftFiles.pdf = null;
+}
+
+function hideAssetConfirmation() {
+  const element = document.getElementById("assetConfirmation");
+  if (!element) {
+    return;
+  }
+
+  element.classList.add("hidden");
+  element.innerHTML = "";
+}
+
+function renderAssetConfirmation(book) {
+  const element = document.getElementById("assetConfirmation");
+  if (!element) {
+    return;
+  }
+
+  const hasAsset = Boolean(book?.pdfUrl || book?.coverUrl);
+  if (!hasAsset) {
+    hideAssetConfirmation();
+    return;
+  }
+
+  element.innerHTML = `
+    <strong>Saved asset links</strong>
+    ${book.pdfUrl ? `<div>PDF: <a href="${escapeHtml(book.pdfUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(book.pdfUrl)}</a></div>` : ""}
+    ${book.coverUrl ? `<div>Cover: <a href="${escapeHtml(book.coverUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(book.coverUrl)}</a></div>` : ""}
+  `;
+  element.classList.remove("hidden");
+}
+
+function isPdfFile(file) {
+  if (!file) {
+    return false;
+  }
+
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function assignFileToInput(input, file) {
+  if (!input || !file) {
+    return;
+  }
+
+  try {
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+  } catch (error) {
+    // Some browsers do not allow programmatic assignment to file inputs.
+  }
+}
+
+function setupPdfDropzone() {
+  const dropzone = document.getElementById("pdfDropzone");
+  const pdfInput = document.getElementById("bookPdfFile");
+
+  if (!dropzone || !pdfInput) {
+    return;
+  }
+
+  dropzone.addEventListener("click", () => {
+    pdfInput.click();
+  });
+
+  ["dragenter", "dragover"].forEach((eventName) => {
+    dropzone.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      dropzone.classList.add("is-dragover");
+    });
+  });
+
+  ["dragleave", "dragend", "drop"].forEach((eventName) => {
+    dropzone.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      dropzone.classList.remove("is-dragover");
+    });
+  });
+
+  dropzone.addEventListener("drop", (event) => {
+    const file = event.dataTransfer?.files?.[0];
+
+    if (!isPdfFile(file)) {
+      toast("Drop a PDF file here.");
+      return;
+    }
+
+    state.adminDraftFiles.pdf = file;
+    assignFileToInput(pdfInput, file);
+    updateSelectedFileStatus();
+    toast(`PDF selected: ${file.name}`);
+  });
+}
+
 async function uploadSelectedAssets() {
-  const coverFile = document.getElementById("bookCoverFile").files[0];
-  const pdfFile = document.getElementById("bookPdfFile").files[0];
+  syncDraftFilesFromInputs();
+  const coverFile = state.adminDraftFiles.cover;
+  const pdfFile = state.adminDraftFiles.pdf;
   const coverUrlInput = document.getElementById("bookCoverUrl");
   const pdfUrlInput = document.getElementById("bookPdfUrl");
 
@@ -1466,16 +1616,24 @@ async function uploadSelectedAssets() {
   }
 
   try {
+    setUploadStatus("coverUploadStatus", coverFile ? `Uploading cover: ${coverFile.name}` : coverUrlInput.value ? "Using existing cover URL." : "No cover file selected yet.");
+    setUploadStatus("pdfUploadStatus", pdfFile ? `Uploading PDF: ${pdfFile.name}` : pdfUrlInput.value ? "Using existing PDF URL." : "No PDF file selected yet.");
+
     if (coverFile) {
       coverUrlInput.value = await uploadToCloudinary(coverFile, "image");
+      setUploadStatus("coverUploadStatus", `Cover uploaded: ${coverFile.name}`);
     }
 
     if (pdfFile) {
       pdfUrlInput.value = await uploadToCloudinary(pdfFile, "raw");
+      setUploadStatus("pdfUploadStatus", `PDF uploaded: ${pdfFile.name}`);
     }
 
+    updateSelectedFileStatus();
     toast("Selected files uploaded successfully.");
   } catch (error) {
+    setUploadStatus("coverUploadStatus", coverFile ? `Cover upload failed for ${coverFile.name}.` : coverUrlInput.value ? "Using existing cover URL." : "No cover file selected yet.");
+    setUploadStatus("pdfUploadStatus", pdfFile ? `PDF upload failed for ${pdfFile.name}.` : pdfUrlInput.value ? "Using existing PDF URL." : "No PDF file selected yet.");
     toast(error.message);
   }
 }
@@ -1491,11 +1649,16 @@ async function handleBookFormSubmit(event) {
   const type = document.getElementById("bookType").value;
   const priceInput = document.getElementById("bookPrice").value.trim();
   const currency = document.getElementById("bookCurrency").value.trim() || "USD";
-  const coverUrl = document.getElementById("bookCoverUrl").value.trim();
-  const pdfUrl = document.getElementById("bookPdfUrl").value.trim();
-  const pdfFile = document.getElementById("bookPdfFile").files[0];
+  const coverUrlInput = document.getElementById("bookCoverUrl");
+  const pdfUrlInput = document.getElementById("bookPdfUrl");
+  syncDraftFilesFromInputs();
+  const coverFile = state.adminDraftFiles.cover;
+  const pdfFile = state.adminDraftFiles.pdf;
+  let coverUrl = coverUrlInput.value.trim();
+  let pdfUrl = pdfUrlInput.value.trim();
   const featured = document.getElementById("bookFeatured").checked;
   const published = document.getElementById("bookPublished").checked;
+  const saveButton = document.getElementById("saveBookButton");
 
   if (!title || !author || !description) {
     toast("Title, author, and description are required.");
@@ -1507,39 +1670,73 @@ async function handleBookFormSubmit(event) {
     return;
   }
 
-  let bookRecord = normalizeBookRecord({
-    id: editingBookId || slugify(title),
-    title,
-    author,
-    description,
-    category,
-    type,
-    price: type === "free" ? "Free" : priceInput || "0.00",
-    currency,
-    featured,
-    published,
-    coverUrl,
-    pdfUrl,
-    pdfFileName: pdfFile ? pdfFile.name : pdfUrl ? pdfUrl.split("/").pop() : "",
-    createdAt: editingBookId
-      ? state.books.find((book) => book.id === editingBookId)?.createdAt || new Date().toISOString()
-      : new Date().toISOString(),
-  });
-
-  if (editingBookId) {
-    state.books = state.books.map((book) => (book.id === editingBookId ? bookRecord : book));
-  } else {
-    const duplicate = state.books.some((book) => book.id === bookRecord.id);
-    if (duplicate) {
-      bookRecord = {
-        ...bookRecord,
-        id: `${bookRecord.id}-${Date.now()}`,
-      };
-    }
-    state.books = [bookRecord, ...state.books];
+  if ((coverFile || pdfFile) && !config.cloudinary?.enabled) {
+    toast("Cloudinary upload is not ready yet. Add the real Cloudinary config in config.js or paste hosted URLs manually.");
+    return;
   }
 
   try {
+    if (saveButton) {
+      saveButton.disabled = true;
+      saveButton.textContent = coverFile || pdfFile ? "Uploading files..." : "Saving...";
+    }
+
+    if (coverFile) {
+      setUploadStatus("coverUploadStatus", `Uploading cover: ${coverFile.name}`);
+      coverUrl = await uploadToCloudinary(coverFile, "image");
+      coverUrlInput.value = coverUrl;
+      setUploadStatus("coverUploadStatus", `Cover uploaded: ${coverFile.name}`);
+    } else if (coverUrl) {
+      setUploadStatus("coverUploadStatus", "Using existing cover URL.");
+    } else {
+      setUploadStatus("coverUploadStatus", "No cover file selected yet.");
+    }
+
+    if (pdfFile) {
+      setUploadStatus("pdfUploadStatus", `Uploading PDF: ${pdfFile.name}`);
+      pdfUrl = await uploadToCloudinary(pdfFile, "raw");
+      pdfUrlInput.value = pdfUrl;
+      setUploadStatus("pdfUploadStatus", `PDF uploaded: ${pdfFile.name}`);
+    } else if (pdfUrl) {
+      setUploadStatus("pdfUploadStatus", "Using existing PDF URL.");
+    } else {
+      setUploadStatus("pdfUploadStatus", "No PDF file selected yet.");
+    }
+
+    let bookRecord = normalizeBookRecord({
+      id: editingBookId || slugify(title),
+      title,
+      author,
+      description,
+      category,
+      type,
+      price: type === "free" ? "Free" : priceInput || "0.00",
+      currency,
+      featured,
+      published,
+      coverUrl,
+      pdfUrl,
+      pdfFileName: pdfFile ? pdfFile.name : pdfUrl ? pdfUrl.split("/").pop() : "",
+      createdAt: editingBookId
+        ? state.books.find((book) => book.id === editingBookId)?.createdAt || new Date().toISOString()
+        : new Date().toISOString(),
+    });
+
+    if (editingBookId) {
+      state.books = state.books.map((book) => (book.id === editingBookId ? bookRecord : book));
+    } else {
+      const duplicate = state.books.some((book) => book.id === bookRecord.id);
+      if (duplicate) {
+        bookRecord = {
+          ...bookRecord,
+          id: `${bookRecord.id}-${Date.now()}`,
+        };
+      }
+      state.books = [bookRecord, ...state.books];
+    }
+
+    saveBooks();
+
     if (hasFirebaseClientConfig() && state.adminSession?.idToken) {
       await writeFirestoreDocument("books", bookRecord.id, bookRecord, state.adminSession);
       await syncBooksFromFirestore(true, state.adminSession);
@@ -1550,10 +1747,38 @@ async function handleBookFormSubmit(event) {
     renderDashboardStats();
     renderAdminBookList();
     resetBookForm();
+    renderAssetConfirmation(bookRecord);
+    clearAdminDraftFiles();
     toast("Book saved successfully.");
   } catch (error) {
     toast(error.message || "Unable to save this book.");
+  } finally {
+    if (saveButton) {
+      saveButton.disabled = false;
+      saveButton.textContent = "Save book";
+    }
   }
+}
+
+async function loadPdfIntoReader(frame, pdfUrl) {
+  if (!frame || !pdfUrl) {
+    return false;
+  }
+
+  if (activeReaderPdfObjectUrl) {
+    URL.revokeObjectURL(activeReaderPdfObjectUrl);
+    activeReaderPdfObjectUrl = null;
+  }
+
+  const response = await fetch(pdfUrl);
+  if (!response.ok) {
+    throw new Error("Unable to load the PDF file.");
+  }
+
+  const pdfBlob = await response.blob();
+  activeReaderPdfObjectUrl = URL.createObjectURL(pdfBlob);
+  frame.src = activeReaderPdfObjectUrl;
+  return true;
 }
 
 function revealDashboard() {
@@ -1574,7 +1799,8 @@ async function setupAdminPage() {
   const adminLogoutButton = document.getElementById("adminLogoutButton");
   const resetDemoDataButton = document.getElementById("resetDemoDataButton");
   const bookForm = document.getElementById("bookForm");
-  const uploadAssetsButton = document.getElementById("uploadAssetsButton");
+  const bookCoverFileInput = document.getElementById("bookCoverFile");
+  const bookPdfFileInput = document.getElementById("bookPdfFile");
 
   await restoreAdminAccess();
 
@@ -1654,14 +1880,26 @@ async function setupAdminPage() {
     });
   }
 
-  if (uploadAssetsButton) {
-    uploadAssetsButton.addEventListener("click", uploadSelectedAssets);
+  if (bookCoverFileInput) {
+    bookCoverFileInput.addEventListener("change", () => {
+      syncDraftFilesFromInputs();
+      updateSelectedFileStatus();
+    });
+  }
+
+  if (bookPdfFileInput) {
+    bookPdfFileInput.addEventListener("change", () => {
+      syncDraftFilesFromInputs();
+      updateSelectedFileStatus();
+    });
   }
 
   if (bookForm) {
     bookForm.addEventListener("submit", handleBookFormSubmit);
   }
 
+  setupPdfDropzone();
+  updateSelectedFileStatus();
   renderDashboardStats();
   renderAdminBookList();
 }
@@ -1747,7 +1985,7 @@ async function setupReaderPage() {
   accessCard.innerHTML = `
     <p class="card-label">Access granted</p>
     <h3>Reader unlocked</h3>
-    <p>${book.pdfUrl ? "The PDF is connected and ready in the viewer below." : "Add the real PDF URL in the admin dashboard or config-linked storage."}</p>
+    <p>${book.pdfUrl ? "The PDF is connected and loading below." : "Add the real PDF URL in the admin dashboard or config-linked storage."}</p>
   `;
 
   if (!book.pdfUrl) {
@@ -1760,7 +1998,23 @@ async function setupReaderPage() {
     return;
   }
 
-  frame.src = book.pdfUrl;
+  try {
+    await loadPdfIntoReader(frame, book.pdfUrl);
+    accessCard.innerHTML = `
+      <p class="card-label">Access granted</p>
+      <h3>Reader unlocked</h3>
+      <p>The uploaded PDF is ready below. If your browser blocks the embedded viewer, open it in a new tab.</p>
+      <a class="ghost-button button-link" href="${escapeHtml(book.pdfUrl)}" target="_blank" rel="noopener noreferrer">Open PDF in new tab</a>
+    `;
+  } catch (error) {
+    frameCard.innerHTML = `
+      <div class="empty-state">
+        <h3>PDF could not load inside the page</h3>
+        <p>The book file exists, but this browser could not embed it here. Open it directly instead.</p>
+        <a class="primary-button button-link" href="${escapeHtml(book.pdfUrl)}" target="_blank" rel="noopener noreferrer">Open PDF</a>
+      </div>
+    `;
+  }
 }
 
 function setupRevealAnimation() {

@@ -146,23 +146,33 @@
 
             <div class="form-grid">
               <label>
-                Cover image URL
-                <input id="bookCoverUrl" type="url" placeholder="https://res.cloudinary.com/..." />
+                Cover image from phone or computer
+                <input id="bookCoverFile" type="file" accept="image/*" />
               </label>
               <label>
-                PDF file URL
-                <input id="bookPdfUrl" type="url" placeholder="https://res.cloudinary.com/.../book.pdf" />
+                PDF file from phone or computer
+                <input id="bookPdfFile" type="file" accept="application/pdf" />
               </label>
+            </div>
+
+            <button class="pdf-dropzone" id="pdfDropzone" type="button">
+              <strong>Drop PDF here</strong>
+              <span>Drag a PDF from your computer into this box, or click here to choose one.</span>
+            </button>
+
+            <div class="upload-status-grid">
+              <div class="upload-status-card" id="coverUploadStatus">No cover file selected yet.</div>
+              <div class="upload-status-card" id="pdfUploadStatus">No PDF file selected yet.</div>
             </div>
 
             <div class="form-grid">
               <label>
-                Optional cover file
-                <input id="bookCoverFile" type="file" accept="image/*" />
+                Cover image URL fallback
+                <input id="bookCoverUrl" type="url" placeholder="Optional existing cover link" />
               </label>
               <label>
-                Optional PDF file
-                <input id="bookPdfFile" type="file" accept="application/pdf" />
+                PDF file URL fallback
+                <input id="bookPdfUrl" type="url" placeholder="Optional existing PDF link" />
               </label>
             </div>
 
@@ -178,13 +188,13 @@
             </div>
 
             <div class="modal-actions">
-              <button class="ghost-button" id="uploadAssetsButton" type="button">Upload selected files</button>
               <button class="primary-button" id="saveBookButton" type="submit">Save book</button>
             </div>
 
             <div class="form-note" id="uploadHint">
-              Add Cloudinary config to enable direct browser uploads, or paste the final URLs manually.
+              Choose files from this device and save. The dashboard will upload them automatically. If you already have hosted links, you can still paste them as a fallback.
             </div>
+            <div class="asset-confirmation hidden" id="assetConfirmation"></div>
           </form>
 
           <div class="admin-library-card">
