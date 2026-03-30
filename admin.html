@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Protected publisher dashboard for managing books, PDF uploads, pricing, and releases."
+    />
+    <title>AKINDELE OKANLAWAN Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-page="admin">
+    <div class="ambient ambient-left" aria-hidden="true"></div>
+    <div class="ambient ambient-right" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <a class="brand" href="./index.html" aria-label="Return to public website">
+        <span class="brand-mark"></span>
+        <span class="brand-text">AKINDELE OKANLAWAN Admin</span>
+      </a>
+      <div class="topbar-actions">
+        <a class="ghost-button button-link" href="./index.html">Public site</a>
+        <a class="ghost-button button-link" href="./reader.html">Reader</a>
+      </div>
+    </header>
+
+    <main class="section admin-shell">
+      <section class="reveal">
+        <div class="section-heading">
+          <p class="eyebrow">Hidden publisher access</p>
+          <h1>Manage books with clarity and control.</h1>
+          <p>
+            This dashboard is structured around a PDF-first workflow so the publisher can
+            upload finished books from a personal computer, set book details, choose free
+            or paid access, and publish cleanly.
+          </p>
+        </div>
+
+        <div class="status-banner" id="adminIntegrationBanner"></div>
+
+        <div class="membership-layout admin-entry-grid">
+          <form class="pricing-card" id="adminLoginForm">
+            <p class="card-label">Admin sign in</p>
+            <h3>Secure publisher login</h3>
+            <label>
+              Email address
+              <input id="adminEmail" type="email" placeholder="admin@example.com" required />
+            </label>
+            <label>
+              Password
+              <input id="adminPassword" type="password" placeholder="Enter password" required />
+            </label>
+            <button class="primary-button modal-submit" id="adminLoginButton" type="submit">
+              Continue to dashboard
+            </button>
+          </form>
+
+          <div class="admin-grid">
+            <article class="admin-panel">
+              <h3>PDF publishing</h3>
+              <p>Upload a finished book PDF, assign its details, and publish it without typing chapters.</p>
+            </article>
+            <article class="admin-panel">
+              <h3>Book metadata</h3>
+              <p>Store title, author, description, category, access type, cover image, and price.</p>
+            </article>
+            <article class="admin-panel">
+              <h3>Payment hooks</h3>
+              <p>Premium books are ready to connect to Flutterwave with verified payment records and controlled access.</p>
+            </article>
+            <article class="admin-panel">
+              <h3>Security-first</h3>
+              <p>Admin access now uses Firebase sign-in and an admin role check before the dashboard opens.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="reveal hidden" id="adminDashboard">
+        <div class="dashboard-header">
+          <div>
+            <p class="eyebrow">Publisher dashboard</p>
+            <h2>Publish, edit, and manage your library.</h2>
+          </div>
+          <div class="topbar-actions">
+            <button class="ghost-button" id="resetDemoDataButton" type="button">Reset demo data</button>
+            <button class="primary-button" id="adminLogoutButton" type="button">Sign out</button>
+          </div>
+        </div>
+
+        <div class="dashboard-stats" id="dashboardStats"></div>
+
+        <div class="dashboard-layout">
+          <form class="pricing-card admin-form-card" id="bookForm">
+            <input id="editingBookId" type="hidden" />
+            <p class="card-label">Book editor</p>
+            <h3 id="bookFormTitle">Add a new book</h3>
+
+            <div class="form-grid">
+              <label>
+                Book title
+                <input id="bookTitle" type="text" placeholder="The Morning Atlas" required />
+              </label>
+              <label>
+                Author name
+                <input id="bookAuthor" type="text" placeholder="Author name" required />
+              </label>
+            </div>
+
+            <label>
+              Description
+              <textarea id="bookDescription" rows="4" placeholder="Write a clean, compelling summary." required></textarea>
+            </label>
+
+            <div class="form-grid">
+              <label>
+                Category
+                <input id="bookCategory" type="text" placeholder="Fiction, Memoir, Poetry..." />
+              </label>
+              <label>
+                Access type
+                <select id="bookType">
+                  <option value="free">Free</option>
+                  <option value="paid">Paid</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                Price
+                <input id="bookPrice" type="text" placeholder="14.99 or Free" />
+              </label>
+              <label>
+                Currency
+                <input id="bookCurrency" type="text" placeholder="USD" value="USD" />
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                Cover image URL
+                <input id="bookCoverUrl" type="url" placeholder="https://res.cloudinary.com/..." />
+              </label>
+              <label>
+                PDF file URL
+                <input id="bookPdfUrl" type="url" placeholder="https://res.cloudinary.com/.../book.pdf" />
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                Optional cover file
+                <input id="bookCoverFile" type="file" accept="image/*" />
+              </label>
+              <label>
+                Optional PDF file
+                <input id="bookPdfFile" type="file" accept="application/pdf" />
+              </label>
+            </div>
+
+            <div class="toggle-row">
+              <label class="checkbox-row">
+                <input id="bookFeatured" type="checkbox" />
+                <span>Feature this book</span>
+              </label>
+              <label class="checkbox-row">
+                <input id="bookPublished" type="checkbox" checked />
+                <span>Publish immediately</span>
+              </label>
+            </div>
+
+            <div class="modal-actions">
+              <button class="ghost-button" id="uploadAssetsButton" type="button">Upload selected files</button>
+              <button class="primary-button" id="saveBookButton" type="submit">Save book</button>
+            </div>
+
+            <div class="form-note" id="uploadHint">
+              Add Cloudinary config to enable direct browser uploads, or paste the final URLs manually.
+            </div>
+          </form>
+
+          <div class="admin-library-card">
+            <div class="dashboard-header compact">
+              <div>
+                <p class="card-label">Library manager</p>
+                <h3>Published and draft books</h3>
+              </div>
+            </div>
+            <div class="admin-library-list" id="adminBookList"></div>
+            <div class="empty-state hidden" id="adminEmptyState">
+              <h3>No books yet.</h3>
+              <p>Add the first title from the form and publish it to the public library.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

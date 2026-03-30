@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Secure reader view for unlocked books." />
+    <title>AKINDELE OKANLAWAN Reader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-page="reader">
+    <div class="ambient ambient-left" aria-hidden="true"></div>
+    <div class="ambient ambient-right" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <a class="brand" href="./index.html" aria-label="Return to library">
+        <span class="brand-mark"></span>
+        <span class="brand-text">AKINDELE OKANLAWAN Reader</span>
+      </a>
+      <div class="topbar-actions" id="readerTopbarActions">
+        <a class="ghost-button button-link" data-static-link href="./index.html">Library</a>
+        <a class="ghost-button button-link" data-static-link href="./admin.html">Admin</a>
+      </div>
+    </header>
+
+    <main class="section reader-shell reveal" id="readerRoot">
+      <div class="reader-hero">
+        <div>
+          <p class="eyebrow">Reading view</p>
+          <h1 id="readerTitle">Loading book</h1>
+          <p class="hero-text" id="readerDescription">
+            Your secure reading view will appear here after access checks are passed.
+          </p>
+          <div class="reader-meta" id="readerMeta"></div>
+        </div>
+        <div class="pricing-card reader-access-card" id="readerAccessCard"></div>
+      </div>
+
+      <section class="reader-frame-card" id="readerFrameCard">
+        <iframe id="readerFrame" class="reader-frame" title="Book reader"></iframe>
+      </section>
+    </main>
+
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

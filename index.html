@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A premium digital reading platform for discovering, unlocking, and reading beautifully published books."
+    />
+    <title>AKINDELE OKANLAWAN</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-page="home">
+    <div class="ambient ambient-left" aria-hidden="true"></div>
+    <div class="ambient ambient-right" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="AKINDELE OKANLAWAN Home">
+        <span class="brand-mark"></span>
+        <span class="brand-text">AKINDELE OKANLAWAN</span>
+      </a>
+
+      <nav class="topnav" aria-label="Primary">
+        <a href="#books">Books</a>
+        <a href="#experience">Experience</a>
+        <a href="#membership">Membership</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+
+      <div class="topbar-actions" id="publicTopbarActions">
+        <button class="ghost-button" data-open-auth="signin" type="button">
+          Sign in
+        </button>
+        <button class="primary-button" data-open-auth="signup" type="button">
+          Create account
+        </button>
+      </div>
+    </header>
+
+    <main id="home">
+      <section class="hero section reveal">
+        <div class="hero-copy">
+          <p class="eyebrow">Digital publishing, elevated</p>
+          <h1>Books designed to feel as refined as the stories inside them.</h1>
+          <p class="hero-text">
+            Give readers a premium reading platform with clean typography,
+            secure access, flexible pricing, and a seamless library experience
+            across every screen.
+          </p>
+          <div class="hero-actions">
+            <button
+              class="primary-button"
+              data-open-auth="signup"
+              type="button"
+            >
+              Start reading
+            </button>
+            <a class="ghost-button button-link" href="#books"
+              >Explore collection</a
+            >
+          </div>
+          <div class="status-banner" id="integrationBanner"></div>
+          <ul class="hero-metrics" aria-label="Platform highlights">
+            <li>
+              <strong>Free + premium</strong>
+              <span
+                >Control which titles stay open and which require payment.</span
+              >
+            </li>
+            <li>
+              <strong>PDF-first workflow</strong>
+              <span
+                >Admins upload finished books and publish them without manual
+                chapter typing.</span
+              >
+            </li>
+            <li>
+              <strong>Mobile-first</strong>
+              <span
+                >App-like motion, spacing, and reading comfort on every
+                device.</span
+              >
+            </li>
+          </ul>
+        </div>
+
+        <div class="device-shell" aria-label="Reading experience">
+          <div class="device-notch"></div>
+          <div class="device-screen">
+            <div class="device-status">
+              <span>09:41</span>
+              <span id="userStatusText">Browse as guest</span>
+            </div>
+            <div class="device-card active">
+              <p class="card-label">Featured release</p>
+              <h2>Upload once. Publish beautifully.</h2>
+              <p>
+                Finished PDF books, clean access control, premium unlock flow,
+                and a reading experience that stays elegant on every screen.
+              </p>
+            </div>
+            <div class="device-book-grid">
+              <article class="mini-book">
+                <span class="pill pill-free">Free</span>
+                <strong>Reader access</strong>
+                <small>Available to members</small>
+              </article>
+              <article class="mini-book">
+                <span class="pill pill-paid">Premium</span>
+                <strong>Premium access</strong>
+                <small>Unlock selected titles</small>
+              </article>
+            </div>
+            <div class="device-reader-line"></div>
+            <div class="device-reader-line short"></div>
+            <div class="device-reader-line"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-tight reveal" id="books">
+        <div class="section-heading">
+          <p class="eyebrow">Collection</p>
+          <h2>
+            Curated books presented with clarity, confidence, and room to
+            breathe.
+          </h2>
+          <p>
+            Everyone can browse the collection first. Sign in to read free
+            titles, and unlock premium titles after verified payment.
+          </p>
+        </div>
+
+        <div class="filters" role="tablist" aria-label="Book filter">
+          <button class="filter-chip active" data-filter="all" type="button">
+            All books
+          </button>
+          <button class="filter-chip" data-filter="free" type="button">
+            Free to read
+          </button>
+          <button class="filter-chip" data-filter="paid" type="button">
+            Premium
+          </button>
+        </div>
+
+        <div class="book-grid" id="bookGrid"></div>
+        <div class="empty-state hidden" id="bookEmptyState">
+          <h3>No books match this filter.</h3>
+          <p>
+            Publish a new book from the admin dashboard or switch the current
+            filter.
+          </p>
+        </div>
+      </section>
+
+      <section class="section experience-grid reveal" id="experience">
+        <div class="section-heading">
+          <p class="eyebrow">Experience</p>
+          <h2>A website that behaves like a premium reading app.</h2>
+        </div>
+
+        <article class="feature-card">
+          <span class="feature-count">01</span>
+          <h3>Elegant onboarding</h3>
+          <p>
+            Readers create an account before accessing books, making
+            authentication a natural part of the journey instead of a
+            disruption.
+          </p>
+        </article>
+
+        <article class="feature-card">
+          <span class="feature-count">02</span>
+          <h3>Protected content access</h3>
+          <p>
+            Books stay visible to everyone. Reading opens only after sign-in,
+            and paid books still require verified payment.
+          </p>
+        </article>
+
+        <article class="feature-card">
+          <span class="feature-count">03</span>
+          <h3>Private admin control</h3>
+          <p>
+            The publisher can add books, upload PDF files, assign pricing,
+            publish, edit, and manage the catalog from one hidden admin
+            experience.
+          </p>
+        </article>
+
+        <article class="feature-card">
+          <span class="feature-count">04</span>
+          <h3>World-class motion</h3>
+          <p>
+            Smooth page reveals, layered transitions, refined hover states, and
+            careful depth effects keep the interface bold without adding visual
+            noise.
+          </p>
+        </article>
+      </section>
+
+      <section class="section membership-layout reveal" id="membership">
+        <div class="section-heading">
+          <p class="eyebrow">Payments</p>
+          <h2>Sell access with confidence.</h2>
+          <p>
+            Offer complimentary reads, release premium titles, and shape a
+            library that supports both discovery and revenue.
+          </p>
+        </div>
+
+        <div class="pricing-card">
+          <p class="card-label">Suggested monetization</p>
+          <h3>Per-book unlock</h3>
+          <p class="price-copy">
+            Perfect for authors who want to mix free books with premium
+            releases.
+          </p>
+          <ul class="feature-list">
+            <li>Anyone can browse the library before signing in.</li>
+            <li>All books require authentication before reading.</li>
+            <li>Premium books unlock after verified payment.</li>
+            <li>
+              Admins control availability, pricing, feature status, and
+              visibility.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section faq-layout reveal" id="faq">
+        <div class="section-heading">
+          <p class="eyebrow">FAQ</p>
+          <h2>Built for trust, clarity, and scale.</h2>
+        </div>
+
+        <div class="faq-list">
+          <details>
+            <summary>
+              Can users damage the app by inspecting the website?
+            </summary>
+            <p>
+              No, not if the real rules are enforced on Firebase and your
+              payment verification runs in Netlify Functions. The frontend
+              should never be trusted for admin access or payment confirmation.
+            </p>
+          </details>
+          <details>
+            <summary>
+              Can the admin upload finished PDF books from a laptop?
+            </summary>
+            <p>
+              Yes. This project is now structured around a PDF-first publishing
+              workflow so the author can upload finished book files instead of
+              typing chapters.
+            </p>
+          </details>
+          <details>
+            <summary>What is already complete?</summary>
+            <p>
+              Readers can browse the collection, create accounts, and move into
+              a focused reading experience designed for modern digital
+              publishing. The platform is structured to support a growing
+              catalog, protected access, and polished book presentation.
+            </p>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer reveal">
+      <div>
+        <p class="eyebrow">AKINDELE OKANLAWAN</p>
+        <p class="footer-copy">
+          Premium reading experiences for modern publishers.
+        </p>
+      </div>
+      <div class="footer-actions">
+        <a class="ghost-button button-link" href="./admin.html">Admin entry</a>
+      </div>
+    </footer>
+
+    <dialog class="modal" id="authModal">
+      <form class="modal-card" id="authForm" method="dialog">
+        <button
+          class="modal-close"
+          id="closeAuthModal"
+          type="submit"
+          aria-label="Close authentication modal"
+        >
+          &times;
+        </button>
+        <p class="eyebrow" id="authModeLabel">Create account</p>
+        <h2 id="authTitle">Start your reading account.</h2>
+        <p class="modal-copy" id="authCopy">
+          Create your account to save your place, unlock your library, and read
+          across every device.
+        </p>
+        <label>
+          Full name
+          <input id="authName" type="text" placeholder="Your name" />
+        </label>
+        <label>
+          Email address
+          <input
+            id="authEmail"
+            type="email"
+            placeholder="name@example.com"
+            required
+          />
+        </label>
+        <label>
+          Password
+          <input
+            id="authPassword"
+            type="password"
+            placeholder="Minimum 8 characters"
+            required
+          />
+        </label>
+        <button
+          class="primary-button modal-submit"
+          id="authActionButton"
+          type="submit"
+        >
+          Create account
+        </button>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="bookModal">
+      <div class="modal-card modal-wide">
+        <button
+          class="modal-close"
+          id="closeBookModal"
+          type="button"
+          aria-label="Close book modal"
+        >
+          &times;
+        </button>
+        <div class="book-modal-layout">
+          <div class="book-cover-large" id="bookModalCover"></div>
+          <div>
+            <p class="eyebrow" id="bookModalType">Preview</p>
+            <h2 id="bookModalTitle"></h2>
+            <p class="book-description" id="bookModalDescription"></p>
+            <div class="meta-row">
+              <span id="bookModalPrice"></span>
+              <span id="bookModalMeta"></span>
+            </div>
+            <div class="modal-actions" id="bookModalActions"></div>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
