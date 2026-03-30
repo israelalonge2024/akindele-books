@@ -1496,8 +1496,16 @@ function updateSelectedFileStatus() {
 }
 
 function syncDraftFilesFromInputs() {
-  state.adminDraftFiles.cover = document.getElementById("bookCoverFile")?.files?.[0] || null;
-  state.adminDraftFiles.pdf = document.getElementById("bookPdfFile")?.files?.[0] || null;
+  const coverInputFile = document.getElementById("bookCoverFile")?.files?.[0] || null;
+  const pdfInputFile = document.getElementById("bookPdfFile")?.files?.[0] || null;
+
+  if (coverInputFile) {
+    state.adminDraftFiles.cover = coverInputFile;
+  }
+
+  if (pdfInputFile) {
+    state.adminDraftFiles.pdf = pdfInputFile;
+  }
 }
 
 function clearAdminDraftFiles() {
