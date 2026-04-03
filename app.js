@@ -169,6 +169,10 @@ function hasAdminClaim(idToken) {
   return Boolean(payload && (payload.admin === true || payload.role === "admin"));
 }
 
+function getAdminVerificationEndpoint() {
+  return config.admin?.verificationEndpoint || "/.netlify/functions/verify-admin-access";
+}
+
 function getFirestoreFieldValue(field) {
   if (!field || typeof field !== "object") {
     return null;
@@ -370,6 +374,31 @@ async function getAdminUserDocument(localId, idToken) {
   return data;
 }
 
+async function verifyAdminAccessWithFunction(session) {
+  const response = await fetch(getAdminVerificationEndpoint(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      localId: session.localId,
+      email: session.email,
+      idToken: session.idToken,
+    }),
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || "Unable to verify admin access.");
+  }
+
+  return typeof data?.isAdmin === "boolean" ? data.isAdmin : null;
+}
+
 async function upsertUserProfile(session, profile) {
   const firebase = getFirebaseSettings();
   const endpoint = `https://firestore.googleapis.com/v1/projects/${firebase.projectId}/databases/(default)/documents/users/${encodeURIComponent(session.localId)}`;
@@ -414,11 +443,29 @@ async function verifyAdminAccess(session) {
     return true;
   }
 
-  const userDoc = await getAdminUserDocument(session.localId, session.idToken);
-  const fields = userDoc?.fields || {};
-  const role = getFirestoreFieldValue(fields.role);
-  const admin = getFirestoreFieldValue(fields.admin);
-  return role === "admin" || admin === true;
+  try {
+    const functionResult = await verifyAdminAccessWithFunction(session);
+    if (typeof functionResult === "boolean") {
+      return functionResult;
+    }
+  } catch (error) {
+    // Fall back to the direct Firestore check if the helper function is unavailable.
+  }
+
+  try {
+    const userDoc = await getAdminUserDocument(session.localId, session.idToken);
+    const fields = userDoc?.fields || {};
+    const role = getFirestoreFieldValue(fields.role);
+    const admin = getFirestoreFieldValue(fields.admin);
+    return role === "admin" || admin === true;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(
+        "Admin verification could not reach Firestore. Deploy the Netlify admin verification function or check your browser network policy."
+      );
+    }
+    throw error;
+  }
 }
 
 async function getUsableAdminSession(session) {
@@ -474,6 +521,8 @@ function formatFirebaseAuthError(message) {
     "Missing or insufficient permissions.": "Firebase signed you in, but Firestore rules are blocking the admin check. Publish the firestore.rules file in Firebase.",
     "Unable to load admin profile.": "Firebase signed you in, but the admin user profile could not be loaded. Check the users collection and Firestore rules.",
     "Unable to save user profile.": "Firebase account worked, but Firestore could not save the user profile. Publish the firestore.rules file.",
+    "Admin verification could not reach Firestore. Deploy the Netlify admin verification function or check your browser network policy.": "Firebase signed you in, but the admin check could not reach Firestore. Deploy the Netlify admin verification function and make sure you open the site through Netlify or a real local server.",
+    "Failed to fetch": "A network request failed after sign-in. This usually means the browser or hosting setup blocked the admin verification request.",
   };
 
   return friendly[message] || message || "Unable to sign in.";
@@ -1810,8 +1859,6 @@ async function setupAdminPage() {
   const bookCoverFileInput = document.getElementById("bookCoverFile");
   const bookPdfFileInput = document.getElementById("bookPdfFile");
 
-  await restoreAdminAccess();
-
   if (adminLoginForm) {
     adminLoginForm.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -1833,25 +1880,25 @@ async function setupAdminPage() {
         adminLoginButton.textContent = "Checking access...";
       }
 
-        try {
-          const session = await signInWithFirebaseEmailPassword(email, password);
-          const isAdmin = await verifyAdminAccess(session);
-          if (!isAdmin) {
-            updateAdminSession(null);
+      try {
+        const session = await signInWithFirebaseEmailPassword(email, password);
+        const isAdmin = await verifyAdminAccess(session);
+        if (!isAdmin) {
+          updateAdminSession(null);
           toast("This account signed in, but it is not an admin account.");
           return;
         }
 
-          updateAdminSession(session);
-          try {
-            await syncBooksFromFirestore(true, session);
-          } catch (error) {
-            // Keep local books if Firestore is not ready yet.
-          }
-          revealDashboard();
-          renderDashboardStats();
-          renderAdminBookList();
-          toast("Admin access granted.");
+        updateAdminSession(session);
+        try {
+          await syncBooksFromFirestore(true, session);
+        } catch (error) {
+          // Keep local books if Firestore is not ready yet.
+        }
+        revealDashboard();
+        renderDashboardStats();
+        renderAdminBookList();
+        toast("Admin access granted.");
       } catch (error) {
         updateAdminSession(null);
         toast(formatFirebaseAuthError(error.message || "Unable to sign in."));
@@ -1862,6 +1909,12 @@ async function setupAdminPage() {
         }
       }
     });
+  }
+
+  try {
+    await restoreAdminAccess();
+  } catch (error) {
+    updateAdminSession(null);
   }
 
   if (adminLogoutButton) {
