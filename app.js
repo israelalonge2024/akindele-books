@@ -80,6 +80,8 @@ const state = {
 };
 
 let activeReaderPdfObjectUrl = null;
+const CLOUDINARY_LARGE_UPLOAD_THRESHOLD_BYTES = 95 * 1024 * 1024;
+const CLOUDINARY_UPLOAD_CHUNK_SIZE_BYTES = 20 * 1024 * 1024;
 
 function getJSON(key, fallback) {
   try {
@@ -1497,9 +1499,81 @@ function bindAdminActions() {
   });
 }
 
-async function uploadToCloudinary(file, resourceType) {
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 MB";
+  }
+
+  const megabytes = bytes / (1024 * 1024);
+  if (megabytes >= 1024) {
+    return `${(megabytes / 1024).toFixed(2)} GB`;
+  }
+
+  return `${megabytes.toFixed(megabytes >= 100 ? 0 : 1)} MB`;
+}
+
+async function parseCloudinaryError(response) {
+  const fallbackMessage = "Cloudinary upload failed.";
+
+  try {
+    const data = await response.json();
+    return data?.error?.message || fallbackMessage;
+  } catch (error) {
+    return fallbackMessage;
+  }
+}
+
+async function uploadToCloudinaryInChunks(file, resourceType, options = {}) {
+  const endpoint = `https://api.cloudinary.com/v1_1/${config.cloudinary.cloudName}/${resourceType}/upload`;
+  const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  let secureUrl = "";
+
+  for (
+    let chunkStart = 0;
+    chunkStart < file.size;
+    chunkStart += CLOUDINARY_UPLOAD_CHUNK_SIZE_BYTES
+  ) {
+    const chunkEnd = Math.min(chunkStart + CLOUDINARY_UPLOAD_CHUNK_SIZE_BYTES, file.size);
+    const formData = new FormData();
+    formData.append("file", file.slice(chunkStart, chunkEnd), file.name);
+    formData.append("upload_preset", config.cloudinary.unsignedUploadPreset);
+    formData.append("folder", config.cloudinary.folder || "luma-library");
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Range": `bytes ${chunkStart}-${chunkEnd - 1}/${file.size}`,
+        "X-Unique-Upload-Id": uploadId,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(await parseCloudinaryError(response));
+    }
+
+    const data = await response.json();
+    secureUrl = data.secure_url || secureUrl;
+
+    if (typeof options.onProgress === "function") {
+      options.onProgress(chunkEnd / file.size);
+    }
+  }
+
+  if (!secureUrl) {
+    throw new Error("Cloudinary upload finished without a file URL.");
+  }
+
+  return secureUrl;
+}
+
+async function uploadToCloudinary(file, resourceType, options = {}) {
   if (!config.cloudinary?.enabled) {
     return null;
+  }
+
+  if (resourceType === "raw" && file.size > CLOUDINARY_LARGE_UPLOAD_THRESHOLD_BYTES) {
+    return uploadToCloudinaryInChunks(file, resourceType, options);
   }
 
   const formData = new FormData();
@@ -1516,10 +1590,13 @@ async function uploadToCloudinary(file, resourceType) {
   );
 
   if (!response.ok) {
-    throw new Error("Cloudinary upload failed.");
+    throw new Error(await parseCloudinaryError(response));
   }
 
   const data = await response.json();
+  if (typeof options.onProgress === "function") {
+    options.onProgress(1);
+  }
   return data.secure_url;
 }
 
@@ -1536,11 +1613,11 @@ function updateSelectedFileStatus() {
 
   setUploadStatus(
     "coverUploadStatus",
-    coverFile ? `Selected cover: ${coverFile.name}` : "No cover file selected yet."
+    coverFile ? `Selected cover: ${coverFile.name} (${formatFileSize(coverFile.size)})` : "No cover file selected yet."
   );
   setUploadStatus(
     "pdfUploadStatus",
-    pdfFile ? `Selected PDF: ${pdfFile.name}` : "No PDF file selected yet."
+    pdfFile ? `Selected PDF: ${pdfFile.name} (${formatFileSize(pdfFile.size)})` : "No PDF file selected yet."
   );
 }
 
@@ -1682,7 +1759,15 @@ async function uploadSelectedAssets() {
     }
 
     if (pdfFile) {
-      pdfUrlInput.value = await uploadToCloudinary(pdfFile, "raw");
+      pdfUrlInput.value = await uploadToCloudinary(pdfFile, "raw", {
+        onProgress(progress) {
+          const percent = Math.round(progress * 100);
+          setUploadStatus(
+            "pdfUploadStatus",
+            `Uploading PDF: ${pdfFile.name} (${formatFileSize(pdfFile.size)}) ${percent}%`
+          );
+        },
+      });
       setUploadStatus("pdfUploadStatus", `PDF uploaded: ${pdfFile.name}`);
     }
 
@@ -1751,7 +1836,15 @@ async function handleBookFormSubmit(event) {
 
     if (pdfFile) {
       setUploadStatus("pdfUploadStatus", `Uploading PDF: ${pdfFile.name}`);
-      pdfUrl = await uploadToCloudinary(pdfFile, "raw");
+      pdfUrl = await uploadToCloudinary(pdfFile, "raw", {
+        onProgress(progress) {
+          const percent = Math.round(progress * 100);
+          setUploadStatus(
+            "pdfUploadStatus",
+            `Uploading PDF: ${pdfFile.name} (${formatFileSize(pdfFile.size)}) ${percent}%`
+          );
+        },
+      });
       pdfUrlInput.value = pdfUrl;
       setUploadStatus("pdfUploadStatus", `PDF uploaded: ${pdfFile.name}`);
     } else if (pdfUrl) {
