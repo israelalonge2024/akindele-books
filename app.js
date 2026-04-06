@@ -73,6 +73,8 @@ const state = {
   session: getJSON(STORAGE_KEYS.session, null),
   purchases: getJSON(STORAGE_KEYS.purchases, []),
   adminSession: getJSON(STORAGE_KEYS.adminSession, null),
+  activeTransferRequest: null,
+  adminTransferRequests: [],
   adminDraftFiles: {
     cover: null,
     pdf: null,
@@ -604,42 +606,175 @@ async function deleteFirestoreDocument(collectionName, documentId, session) {
   }
 }
 
-async function queryUserPurchases(session) {
+async function queryFirestoreDocuments(structuredQuery, session, fallbackMessage) {
   const response = await fetch(`${getFirestoreBaseUrl()}:runQuery`, {
     method: "POST",
     headers: getFirestoreHeaders(session),
     body: JSON.stringify({
-      structuredQuery: {
-        from: [
-          {
-            collectionId: "purchases",
-          },
-        ],
-        where: {
-          fieldFilter: {
-            field: {
-              fieldPath: "userId",
-            },
-            op: "EQUAL",
-            value: {
-              stringValue: session.localId,
-            },
-          },
-        },
-      },
+      structuredQuery,
     }),
   });
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data?.error?.message || "Unable to load purchases.");
+    throw new Error(data?.error?.message || fallbackMessage || "Unable to load documents.");
   }
 
   return (Array.isArray(data) ? data : [])
     .map((entry) => entry.document)
     .filter(Boolean)
-    .map(fromFirestoreDocument)
-    .filter((purchase) => purchase.status === "paid");
+    .map(fromFirestoreDocument);
+}
+
+async function queryUserPurchases(session) {
+  const purchases = await queryFirestoreDocuments(
+    {
+      from: [
+        {
+          collectionId: "purchases",
+        },
+      ],
+      where: {
+        fieldFilter: {
+          field: {
+            fieldPath: "userId",
+          },
+          op: "EQUAL",
+          value: {
+            stringValue: session.localId,
+          },
+        },
+      },
+    },
+    session,
+    "Unable to load purchases."
+  );
+
+  return purchases.filter((purchase) => purchase.status === "paid");
+}
+
+function normalizeTransferRequestRecord(request) {
+  return {
+    id: request.id,
+    bookId: request.bookId || "",
+    bookTitle: request.bookTitle || "",
+    userId: request.userId || "",
+    userEmail: request.userEmail || "",
+    amount: String(request.amount || ""),
+    currency: request.currency || "NGN",
+    bankName: request.bankName || "",
+    accountName: request.accountName || "",
+    accountNumber: request.accountNumber || "",
+    paymentReference: request.paymentReference || "",
+    senderName: request.senderName || "",
+    payerNote: request.payerNote || "",
+    proofUrl: request.proofUrl || "",
+    status: request.status || "awaiting_payment",
+    createdAt: request.createdAt || new Date().toISOString(),
+    paymentSubmittedAt: request.paymentSubmittedAt || "",
+    reviewedAt: request.reviewedAt || "",
+    reviewedBy: request.reviewedBy || "",
+    adminNote: request.adminNote || "",
+  };
+}
+
+async function queryUserTransferRequests(session) {
+  if (!session?.localId) {
+    return [];
+  }
+
+  const requests = await queryFirestoreDocuments(
+    {
+      from: [
+        {
+          collectionId: "transferRequests",
+        },
+      ],
+      where: {
+        fieldFilter: {
+          field: {
+            fieldPath: "userId",
+          },
+          op: "EQUAL",
+          value: {
+            stringValue: session.localId,
+          },
+        },
+      },
+    },
+    session,
+    "Unable to load bank transfer requests."
+  );
+
+  return requests
+    .map(normalizeTransferRequestRecord)
+    .sort((first, second) => new Date(second.createdAt) - new Date(first.createdAt));
+}
+
+async function fetchAdminTransferRequests(session) {
+  const requests = await fetchFirestoreDocumentList("transferRequests", session);
+  return requests
+    .map(normalizeTransferRequestRecord)
+    .sort((first, second) => new Date(second.createdAt) - new Date(first.createdAt));
+}
+
+function getBankTransferConfig() {
+  return {
+    enabled: Boolean(config.bankTransfer?.enabled),
+    bankName: config.bankTransfer?.bankName || "Wema Bank",
+    accountNumber: config.bankTransfer?.accountNumber || "",
+    accountName: config.bankTransfer?.accountName || "",
+    currency: config.bankTransfer?.currency || "NGN",
+  };
+}
+
+function getShortUserKey(value) {
+  return String(value || "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase()
+    .slice(-6) || "READER";
+}
+
+function createTransferRequestId(bookId, userId) {
+  const randomPart = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `tr_${slugify(bookId).slice(0, 24)}_${slugify(userId).slice(0, 24)}_${Date.now()}_${randomPart}`;
+}
+
+function createPaymentReference(bookId, userId) {
+  const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const bookPart = slugify(bookId).replace(/-/g, "").toUpperCase().slice(0, 6) || "BOOK";
+  const userPart = getShortUserKey(userId);
+  const randomPart = Math.floor(1000 + Math.random() * 9000);
+  return `WEMA-${bookPart}-${userPart}-${datePart}-${randomPart}`;
+}
+
+function isTransferRequestOpen(request) {
+  return ["awaiting_payment", "payment_submitted", "needs_review"].includes(request.status);
+}
+
+function getLatestTransferRequestForBook(requests, bookId) {
+  return requests.find((request) => request.bookId === bookId && isTransferRequestOpen(request)) || null;
+}
+
+async function getCurrentTransferRequestForBook(bookId) {
+  if (!state.session?.idToken) {
+    return null;
+  }
+
+  const requests = await queryUserTransferRequests(state.session);
+  const activeRequest = getLatestTransferRequestForBook(requests, bookId);
+  state.activeTransferRequest = activeRequest;
+  return activeRequest;
+}
+
+async function syncAdminTransferRequests() {
+  if (!state.adminSession?.idToken || !hasFirebaseClientConfig()) {
+    state.adminTransferRequests = [];
+    return false;
+  }
+
+  state.adminTransferRequests = await fetchAdminTransferRequests(state.adminSession);
+  return true;
 }
 
 function normalizeBookRecord(book) {
@@ -711,9 +846,15 @@ async function restoreAdminAccess() {
     } catch (error) {
       // Keep local book cache if Firestore books are not ready yet.
     }
+    try {
+      await syncAdminTransferRequests();
+    } catch (error) {
+      state.adminTransferRequests = [];
+    }
     revealDashboard();
     renderDashboardStats();
     renderAdminBookList();
+    renderAdminTransferRequests();
     return true;
   } catch (error) {
     updateAdminSession(null);
@@ -773,7 +914,7 @@ function integrationFlags() {
   return {
     firebase: Boolean(config.firebase && config.firebase.enabled),
     cloudinary: Boolean(config.cloudinary && config.cloudinary.enabled),
-    flutterwave: Boolean(config.flutterwave && config.flutterwave.enabled),
+    bankTransfer: Boolean(config.bankTransfer && config.bankTransfer.enabled),
   };
 }
 
@@ -804,16 +945,14 @@ function renderIntegrationBanner(targetId) {
   const items = [
     { label: "Firebase", active: flags.firebase },
     { label: "Cloudinary", active: flags.cloudinary },
-    { label: "Flutterwave", active: flags.flutterwave },
+    { label: "Wema transfer", active: flags.bankTransfer },
   ];
 
   container.innerHTML = `
     <div class="status-banner-copy">
-      <strong>${config.app?.mode === "demo" ? "Setup still in progress." : "Live config detected."}</strong>
+      <strong>Production services status.</strong>
       <span>
-        ${config.app?.mode === "demo"
-          ? "Firebase, Cloudinary, and Flutterwave can be connected step by step from the project guides."
-          : "Config values were detected. Finish your backend wiring and security rules before launch."}
+        Confirm that authentication, storage, and payments are connected before publishing changes to customers.
       </span>
     </div>
     <div class="status-pill-row">
@@ -821,7 +960,7 @@ function renderIntegrationBanner(targetId) {
         .map(
           (item) => `
             <span class="status-pill ${item.active ? "active" : ""}">
-              ${item.label}: ${item.active ? "connected" : "not connected"}
+              ${item.label}: ${item.active ? "connected" : "requires configuration"}
             </span>
           `
         )
@@ -909,6 +1048,229 @@ function renderPublicBooks() {
   bindPublicBookActions();
 }
 
+function formatTransferStatus(status) {
+  const labels = {
+    awaiting_payment: "Awaiting payment",
+    payment_submitted: "Pending admin confirmation",
+    approved: "Approved",
+    rejected: "Rejected",
+    needs_review: "Needs review",
+  };
+
+  return labels[status] || "Pending";
+}
+
+function formatTransferTimestamp(value, fallback = "Not yet") {
+  if (!value) {
+    return fallback;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString();
+}
+
+function buildBankTransferDetailsMarkup(book, request) {
+  const bank = getBankTransferConfig();
+
+  return `
+    <div class="bank-transfer-box">
+      <p class="bank-transfer-title">Wema bank transfer details</p>
+      <div class="bank-transfer-grid">
+        <div class="bank-transfer-detail">
+          <span>Bank</span>
+          <strong>${escapeHtml(bank.bankName)}</strong>
+        </div>
+        <div class="bank-transfer-detail">
+          <span>Account number</span>
+          <strong>${escapeHtml(bank.accountNumber)}</strong>
+        </div>
+        <div class="bank-transfer-detail">
+          <span>Account name</span>
+          <strong>${escapeHtml(bank.accountName)}</strong>
+        </div>
+        <div class="bank-transfer-detail">
+          <span>Amount</span>
+          <strong>${escapeHtml(formatPrice(book))}</strong>
+        </div>
+        <div class="bank-transfer-detail bank-transfer-detail-wide">
+          <span>Payment reference</span>
+          <strong>${escapeHtml(request.paymentReference)}</strong>
+        </div>
+      </div>
+      <p class="bank-transfer-copy">
+        Use the payment reference above in your bank narration so the admin can match your transfer quickly.
+      </p>
+    </div>
+  `;
+}
+
+function renderAwaitingTransferRequest(book, request) {
+  const actions = document.getElementById("bookModalActions");
+  if (!actions) {
+    return;
+  }
+
+  actions.innerHTML = `
+    ${buildBankTransferDetailsMarkup(book, request)}
+    <div class="bank-transfer-form">
+      <label>
+        Sender name
+        <input id="transferSenderName" type="text" placeholder="Name used on the transfer" value="${escapeHtml(request.senderName)}" />
+      </label>
+      <label>
+        Payment time
+        <input id="transferPaidAt" type="datetime-local" />
+      </label>
+      <label>
+        Optional note or proof URL
+        <input id="transferProofUrl" type="text" placeholder="Optional proof link or short note" value="${escapeHtml(request.proofUrl || request.payerNote)}" />
+      </label>
+      <div class="bank-transfer-note">
+        Your request is already saved. If this page refreshes, we will reopen this same payment request for your account.
+      </div>
+      <div class="modal-actions bank-transfer-actions">
+        <button class="ghost-button" type="button" data-payment="bank-transfer">
+          Refresh details
+        </button>
+        <button class="primary-button" type="button" data-submit-bank-transfer="${request.id}">
+          I have made payment
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function renderSubmittedTransferRequest(book, request) {
+  const actions = document.getElementById("bookModalActions");
+  if (!actions) {
+    return;
+  }
+
+  const copy =
+    request.status === "approved"
+      ? `${book.title} has been approved for your account. Refresh the library or reopen this book if it has not unlocked yet.`
+      : `Your payment request was submitted on ${formatTransferTimestamp(
+          request.paymentSubmittedAt,
+          "this device"
+        )}. We will unlock ${book.title} after the admin confirms the transfer in the Wema account.`;
+
+  actions.innerHTML = `
+    ${buildBankTransferDetailsMarkup(book, request)}
+    <div class="bank-transfer-box bank-transfer-status-box">
+      <p class="bank-transfer-title">${escapeHtml(formatTransferStatus(request.status))}</p>
+      <p class="bank-transfer-copy">
+        ${escapeHtml(copy)}
+      </p>
+      ${
+        request.adminNote
+          ? `<p class="bank-transfer-note">Admin note: ${escapeHtml(request.adminNote)}</p>`
+          : '<p class="bank-transfer-note">If you already transferred successfully, you do not need to submit again.</p>'
+      }
+    </div>
+  `;
+}
+
+async function showBankTransferState(book) {
+  const bank = getBankTransferConfig();
+  if (!bank.enabled || !bank.accountNumber || !bank.accountName) {
+    toast("Wema bank transfer is not fully configured yet.");
+    return;
+  }
+
+  if (!state.session?.idToken) {
+    openAuthModal("signin");
+    return;
+  }
+
+  try {
+    let request = await getCurrentTransferRequestForBook(book.id);
+
+    if (!request) {
+      const timestamp = new Date().toISOString();
+      request = normalizeTransferRequestRecord({
+        id: createTransferRequestId(book.id, state.session.localId),
+        bookId: book.id,
+        bookTitle: book.title,
+        userId: state.session.localId,
+        userEmail: state.session.email,
+        amount: book.price,
+        currency: book.currency || bank.currency,
+        bankName: bank.bankName,
+        accountName: bank.accountName,
+        accountNumber: bank.accountNumber,
+        paymentReference: createPaymentReference(book.id, state.session.localId),
+        status: "awaiting_payment",
+        createdAt: timestamp,
+      });
+
+      await writeFirestoreDocument("transferRequests", request.id, request, state.session);
+    }
+
+    state.activeTransferRequest = request;
+
+    if (request.status === "payment_submitted" || request.status === "needs_review") {
+      renderSubmittedTransferRequest(book, request);
+      return;
+    }
+
+    if (request.status === "approved") {
+      await syncReaderPurchases();
+      renderPublicBooks();
+      if (canAccessBook(book)) {
+        openBookModal(book.id);
+        return;
+      }
+      renderSubmittedTransferRequest(book, request);
+      return;
+    }
+
+    renderAwaitingTransferRequest(book, request);
+  } catch (error) {
+    toast(error.message || "Unable to load Wema transfer details.");
+  }
+}
+
+async function submitBankTransferRequest(requestId) {
+  const book = state.activeBook;
+  const request = state.activeTransferRequest;
+
+  if (!book || !request || request.id !== requestId || !state.session?.idToken) {
+    toast("Open the transfer details again before submitting payment.");
+    return;
+  }
+
+  const senderName = document.getElementById("transferSenderName")?.value.trim() || "";
+  const paidAtValue = document.getElementById("transferPaidAt")?.value || "";
+  const proofOrNote = document.getElementById("transferProofUrl")?.value.trim() || "";
+
+  if (!senderName) {
+    toast("Enter the sender name used for the transfer.");
+    return;
+  }
+
+  const updatedRequest = normalizeTransferRequestRecord({
+    ...request,
+    senderName,
+    proofUrl: proofOrNote.startsWith("http://") || proofOrNote.startsWith("https://") ? proofOrNote : "",
+    payerNote: proofOrNote.startsWith("http://") || proofOrNote.startsWith("https://") ? request.payerNote : proofOrNote,
+    status: "payment_submitted",
+    paymentSubmittedAt: paidAtValue ? new Date(paidAtValue).toISOString() : new Date().toISOString(),
+  });
+
+  try {
+    await writeFirestoreDocument("transferRequests", updatedRequest.id, updatedRequest, state.session);
+    state.activeTransferRequest = updatedRequest;
+    renderSubmittedTransferRequest(book, updatedRequest);
+    toast("Payment submitted. The admin can now review and confirm your transfer.");
+  } catch (error) {
+    toast(error.message || "Unable to submit this bank transfer request.");
+  }
+}
+
 function openAuthModal(mode) {
   const authModal = document.getElementById("authModal");
   const authModeLabel = document.getElementById("authModeLabel");
@@ -971,9 +1333,15 @@ function openBookModal(bookId) {
     `;
   } else {
     actions.innerHTML = `
-      <button class="payment-button" type="button" data-payment="flutterwave">
-        Pay with Flutterwave
-      </button>
+      <div class="bank-transfer-box">
+        <p class="bank-transfer-title">Pay via Wema Bank transfer</p>
+        <p class="bank-transfer-copy">
+          We will save a payment request for this exact book and account before showing the transfer details.
+        </p>
+        <button class="payment-button" type="button" data-payment="bank-transfer">
+          View Wema transfer details
+        </button>
+      </div>
     `;
   }
 
@@ -1151,6 +1519,7 @@ function setupPublicModalsAndActions() {
     if (target.dataset.logout !== undefined) {
       updateSession(null);
       updatePurchases([]);
+      state.activeTransferRequest = null;
       renderSignedInChrome();
       renderPublicBooks();
 
@@ -1162,121 +1531,14 @@ function setupPublicModalsAndActions() {
       toast("You have been logged out.");
     }
 
-    if (target.dataset.payment === "flutterwave") {
-      await handlePayment("flutterwave");
+    if (target.dataset.payment === "bank-transfer") {
+      await showBankTransferState(state.activeBook);
+    }
+
+    if (target.dataset.submitBankTransfer) {
+      await submitBankTransferRequest(target.dataset.submitBankTransfer);
     }
   });
-}
-
-async function handlePayment(provider) {
-  const book = state.activeBook;
-  if (!book) {
-    return;
-  }
-
-  if (!state.session) {
-    openAuthModal("signin");
-    return;
-  }
-
-  const providerConfig = config[provider];
-  if (!providerConfig || !providerConfig.enabled) {
-    toast("Flutterwave is not connected yet. Add your Flutterwave and Netlify values first.");
-    return;
-  }
-
-  try {
-    const response = await postJson(providerConfig.checkoutEndpoint, {
-      bookId: book.id,
-      userId: state.session.localId,
-      customerEmail: state.session.email,
-      customerName: state.session.name || state.session.email,
-    });
-
-    if (!response.link) {
-      throw new Error("Flutterwave checkout link was not returned.");
-    }
-
-    window.location.href = response.link;
-  } catch (error) {
-    toast(error.message || "Unable to start Flutterwave checkout.");
-  }
-}
-
-function clearFlutterwaveQueryParams() {
-  const url = new URL(window.location.href);
-  [
-    "payment",
-    "status",
-    "tx_ref",
-    "transaction_id",
-    "transactionId",
-    "flw_tx_id",
-  ].forEach((key) => url.searchParams.delete(key));
-  window.history.replaceState({}, document.title, url.toString());
-}
-
-async function handleFlutterwaveReturn() {
-  if (!config.flutterwave?.enabled) {
-    return;
-  }
-
-  const params = new URLSearchParams(window.location.search);
-  const txRef = params.get("tx_ref");
-  const status = String(params.get("status") || "").toLowerCase();
-  const transactionId =
-    params.get("transaction_id") ||
-    params.get("transactionId") ||
-    params.get("flw_tx_id");
-
-  if (!txRef && !transactionId) {
-    return;
-  }
-
-  if (status === "cancelled") {
-    clearFlutterwaveQueryParams();
-    toast("Payment was cancelled before completion.");
-    return;
-  }
-
-  if (!txRef || !transactionId) {
-    clearFlutterwaveQueryParams();
-    toast("Flutterwave returned incomplete payment details.");
-    return;
-  }
-
-  try {
-    const response = await postJson(config.flutterwave.verificationEndpoint, {
-      txRef,
-      transactionId,
-    });
-
-    if (response?.purchase) {
-      const purchases = state.purchases.filter((purchase) => purchase.txRef !== response.purchase.txRef);
-      updatePurchases([...purchases, response.purchase]);
-    }
-
-    try {
-      await syncReaderPurchases();
-    } catch (error) {
-      // Keep the verified purchase locally if Firestore reads are not ready yet.
-    }
-    closeDialog("bookModal");
-    clearFlutterwaveQueryParams();
-    renderPublicBooks();
-
-    const purchasedBookId = response?.purchase?.bookId;
-    if (purchasedBookId) {
-      toast("Payment verified. Your book is now unlocked.");
-      window.location.href = `./reader.html?id=${encodeURIComponent(purchasedBookId)}`;
-      return;
-    }
-
-    toast("Payment verified successfully.");
-  } catch (error) {
-    clearFlutterwaveQueryParams();
-    toast(error.message || "Flutterwave payment verification failed.");
-  }
 }
 
 async function buildPublicPage() {
@@ -1292,7 +1554,6 @@ async function buildPublicPage() {
   } catch (error) {
     // Keep local purchases when Firestore is not ready yet.
   }
-  await handleFlutterwaveReturn();
   renderSignedInChrome();
   renderPublicBooks();
   setupPublicFilters();
@@ -1309,7 +1570,9 @@ function renderDashboardStats() {
   const allBooks = state.books.length;
   const published = state.books.filter((book) => book.published).length;
   const premium = state.books.filter((book) => book.type === "paid").length;
-  const featured = state.books.filter((book) => book.featured).length;
+  const pendingTransfers = state.adminTransferRequests.filter((request) =>
+    ["payment_submitted", "needs_review"].includes(request.status)
+  ).length;
 
   stats.innerHTML = `
     <article class="stat-card">
@@ -1325,10 +1588,78 @@ function renderDashboardStats() {
       <strong>${premium}</strong>
     </article>
     <article class="stat-card">
-      <span>Featured</span>
-      <strong>${featured}</strong>
+      <span>Bank transfers waiting</span>
+      <strong>${pendingTransfers}</strong>
     </article>
   `;
+}
+
+function renderAdminTransferRequests() {
+  const container = document.getElementById("adminTransferRequestList");
+  const emptyState = document.getElementById("adminTransferEmptyState");
+  if (!container || !emptyState) {
+    return;
+  }
+
+  if (!state.adminTransferRequests.length) {
+    container.innerHTML = "";
+    emptyState.classList.remove("hidden");
+    return;
+  }
+
+  emptyState.classList.add("hidden");
+  container.innerHTML = state.adminTransferRequests
+    .map(
+      (request) => `
+        <article class="transfer-request-card">
+          <div class="transfer-request-header">
+            <div>
+              <h3>${escapeHtml(request.bookTitle || request.bookId)}</h3>
+              <p>${escapeHtml(request.userEmail || request.userId)}</p>
+            </div>
+            <span class="pill ${request.status === "approved" ? "pill-featured" : request.status === "rejected" ? "pill-draft" : "pill-paid"}">
+              ${escapeHtml(formatTransferStatus(request.status))}
+            </span>
+          </div>
+          <div class="transfer-request-grid">
+            <div><span>User ID</span><strong>${escapeHtml(request.userId)}</strong></div>
+            <div><span>Amount</span><strong>${escapeHtml(`${request.currency} ${request.amount}`)}</strong></div>
+            <div><span>Reference</span><strong>${escapeHtml(request.paymentReference || "Not provided")}</strong></div>
+            <div><span>Sender name</span><strong>${escapeHtml(request.senderName || "Not provided")}</strong></div>
+            <div><span>Created</span><strong>${escapeHtml(formatTransferTimestamp(request.createdAt))}</strong></div>
+            <div><span>Submitted</span><strong>${escapeHtml(formatTransferTimestamp(request.paymentSubmittedAt))}</strong></div>
+          </div>
+          ${
+            request.proofUrl
+              ? `<a class="admin-asset-link" href="${escapeHtml(request.proofUrl)}" target="_blank" rel="noopener noreferrer">Open proof link</a>`
+              : ""
+          }
+          ${
+            request.payerNote
+              ? `<p class="transfer-request-note"><strong>User note:</strong> ${escapeHtml(request.payerNote)}</p>`
+              : ""
+          }
+          <label>
+            Admin note
+            <textarea id="adminNote-${escapeHtml(request.id)}" rows="3" placeholder="Optional note for the reader">${escapeHtml(request.adminNote)}</textarea>
+          </label>
+          <div class="book-actions">
+            <button class="primary-button" type="button" data-approve-transfer="${request.id}">
+              Approve and unlock
+            </button>
+            <button class="ghost-button" type="button" data-needs-review-transfer="${request.id}">
+              Mark needs review
+            </button>
+            <button class="ghost-button danger-button" type="button" data-reject-transfer="${request.id}">
+              Reject
+            </button>
+          </div>
+        </article>
+      `
+    )
+    .join("");
+
+  bindAdminTransferActions();
 }
 
 function renderAdminBookList() {
@@ -1495,6 +1826,108 @@ function bindAdminActions() {
       } catch (error) {
         toast(error.message || "Unable to delete this book.");
       }
+    });
+  });
+}
+
+function getAdminTransferNote(requestId) {
+  return document.getElementById(`adminNote-${requestId}`)?.value.trim() || "";
+}
+
+async function approveTransferRequest(requestId) {
+  const request = state.adminTransferRequests.find((item) => item.id === requestId);
+  if (!request || !state.adminSession?.idToken) {
+    toast("Reload the admin dashboard and try again.");
+    return;
+  }
+
+  const adminNote = getAdminTransferNote(requestId);
+  const timestamp = new Date().toISOString();
+  const updatedRequest = normalizeTransferRequestRecord({
+    ...request,
+    status: "approved",
+    adminNote,
+    reviewedAt: timestamp,
+    reviewedBy: state.adminSession.email,
+  });
+  const purchaseRecord = {
+    bookId: request.bookId,
+    bookTitle: request.bookTitle || "",
+    userId: request.userId,
+    userEmail: request.userEmail,
+    customerName: request.senderName || request.userEmail,
+    amount: request.amount,
+    currency: request.currency || "NGN",
+    status: "paid",
+    provider: "bank_transfer",
+    txRef: request.paymentReference,
+    transactionId: request.id,
+    paymentStatus: "approved",
+    transferRequestId: request.id,
+    createdAt: request.createdAt || timestamp,
+    verifiedAt: timestamp,
+    approvedAt: timestamp,
+  };
+
+  try {
+    await writeFirestoreDocument("purchases", request.id, purchaseRecord, state.adminSession);
+    await writeFirestoreDocument("transferRequests", request.id, updatedRequest, state.adminSession);
+    await syncAdminTransferRequests();
+    renderAdminTransferRequests();
+    renderDashboardStats();
+    toast("Transfer approved and the book is now unlocked for that reader.");
+  } catch (error) {
+    toast(error.message || "Unable to approve this transfer request.");
+  }
+}
+
+async function updateTransferRequestStatus(requestId, status) {
+  const request = state.adminTransferRequests.find((item) => item.id === requestId);
+  if (!request || !state.adminSession?.idToken) {
+    toast("Reload the admin dashboard and try again.");
+    return;
+  }
+
+  const adminNote = getAdminTransferNote(requestId);
+  const updatedRequest = normalizeTransferRequestRecord({
+    ...request,
+    status,
+    adminNote,
+    reviewedAt: new Date().toISOString(),
+    reviewedBy: state.adminSession.email,
+  });
+
+  try {
+    await writeFirestoreDocument("transferRequests", request.id, updatedRequest, state.adminSession);
+    await syncAdminTransferRequests();
+    renderAdminTransferRequests();
+    renderDashboardStats();
+    toast(
+      status === "rejected"
+        ? "Transfer request rejected."
+        : "Transfer request marked for another review."
+    );
+  } catch (error) {
+    toast(error.message || "Unable to update this transfer request.");
+  }
+}
+
+function bindAdminTransferActions() {
+  document.querySelectorAll("[data-approve-transfer]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await approveTransferRequest(button.dataset.approveTransfer);
+    });
+  });
+
+  document.querySelectorAll("[data-needs-review-transfer]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await updateTransferRequestStatus(button.dataset.needsReviewTransfer, "needs_review");
+    });
+  });
+
+  document.querySelectorAll("[data-reject-transfer]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await updateTransferRequestStatus(button.dataset.rejectTransfer, "rejected");
     });
   });
 }
@@ -1931,6 +2364,23 @@ async function loadPdfIntoReader(frame, pdfUrl) {
   return true;
 }
 
+function renderReaderUnavailable(frameCard, book) {
+  if (!frameCard || !book) {
+    return;
+  }
+
+  frameCard.innerHTML = `
+    <div class="empty-state">
+      <h3>Reader file unavailable</h3>
+      <p>
+        The published reader cannot open this title because a production PDF URL has not been attached yet.
+      </p>
+      <p><strong>Book:</strong> ${escapeHtml(book.title)} by ${escapeHtml(book.author)}</p>
+      <a class="primary-button button-link" href="./admin.html">Open admin dashboard</a>
+    </div>
+  `;
+}
+
 function revealDashboard() {
   const dashboard = document.getElementById("adminDashboard");
   if (!dashboard) {
@@ -1947,7 +2397,7 @@ async function setupAdminPage() {
   const adminLoginForm = document.getElementById("adminLoginForm");
   const adminLoginButton = document.getElementById("adminLoginButton");
   const adminLogoutButton = document.getElementById("adminLogoutButton");
-  const resetDemoDataButton = document.getElementById("resetDemoDataButton");
+  const resetCatalogCacheButton = document.getElementById("resetCatalogCacheButton");
   const bookForm = document.getElementById("bookForm");
   const bookCoverFileInput = document.getElementById("bookCoverFile");
   const bookPdfFileInput = document.getElementById("bookPdfFile");
@@ -1976,6 +2426,7 @@ async function setupAdminPage() {
       try {
         const session = await signInWithFirebaseEmailPassword(email, password);
         const isAdmin = await verifyAdminAccess(session);
+
         if (!isAdmin) {
           updateAdminSession(null);
           toast("This account signed in, but it is not an admin account.");
@@ -1988,9 +2439,15 @@ async function setupAdminPage() {
         } catch (error) {
           // Keep local books if Firestore is not ready yet.
         }
+        try {
+          await syncAdminTransferRequests();
+        } catch (error) {
+          state.adminTransferRequests = [];
+        }
         revealDashboard();
         renderDashboardStats();
         renderAdminBookList();
+        renderAdminTransferRequests();
         toast("Admin access granted.");
       } catch (error) {
         updateAdminSession(null);
@@ -2017,9 +2474,9 @@ async function setupAdminPage() {
     });
   }
 
-  if (resetDemoDataButton) {
-    resetDemoDataButton.addEventListener("click", () => {
-      const confirmed = window.confirm("Reset local fallback books and purchases on this device?");
+  if (resetCatalogCacheButton) {
+    resetCatalogCacheButton.addEventListener("click", () => {
+      const confirmed = window.confirm("Reset the locally cached catalog and purchase data on this device?");
       if (!confirmed) {
         return;
       }
@@ -2027,10 +2484,12 @@ async function setupAdminPage() {
       state.books = [...DEFAULT_BOOKS];
       saveBooks();
       updatePurchases([]);
+      state.adminTransferRequests = [];
       renderDashboardStats();
       renderAdminBookList();
+      renderAdminTransferRequests();
       resetBookForm();
-      toast("Local fallback data restored.");
+      toast("Local cache reset on this device.");
     });
   }
 
@@ -2056,6 +2515,7 @@ async function setupAdminPage() {
   updateSelectedFileStatus();
   renderDashboardStats();
   renderAdminBookList();
+  renderAdminTransferRequests();
 }
 
 async function setupReaderPage() {
@@ -2128,7 +2588,7 @@ async function setupReaderPage() {
       <p>
         ${book.type === "free"
           ? "Log in with your reader account from the library, then reopen this book."
-          : "Return to the library and complete checkout before opening the premium reader."}
+          : "Return to the library and complete the Wema transfer flow before opening the premium reader."}
       </p>
       <a class="primary-button button-link" href="./index.html">Return to library</a>
     `;
@@ -2139,16 +2599,11 @@ async function setupReaderPage() {
   accessCard.innerHTML = `
     <p class="card-label">Access granted</p>
     <h3>Reader unlocked</h3>
-    <p>${book.pdfUrl ? "The PDF is connected and loading below." : "Add the real PDF URL in the admin dashboard or config-linked storage."}</p>
+    <p>${book.pdfUrl ? "The PDF is connected and loading below." : "This title cannot open until a production PDF URL is attached in the admin dashboard."}</p>
   `;
 
   if (!book.pdfUrl) {
-    frameCard.innerHTML = `
-      <div class="empty-state">
-        <h3>PDF URL missing</h3>
-        <p>Add the final PDF URL from the admin dashboard, then reopen this reader page.</p>
-      </div>
-    `;
+    renderReaderUnavailable(frameCard, book);
     return;
   }
 

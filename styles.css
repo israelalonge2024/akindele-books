@@ -308,6 +308,13 @@ h3 {
   color: var(--muted);
 }
 
+.bank-transfer-copy,
+.bank-transfer-note,
+.transfer-request-note,
+.transfer-request-grid span {
+  color: var(--muted);
+}
+
 .status-pill-row {
   display: flex;
   flex-wrap: wrap;
@@ -342,7 +349,9 @@ h3 {
 .feature-card,
 .book-card,
 .admin-panel,
-.faq-list details {
+.faq-list details,
+.bank-transfer-box,
+.transfer-request-card {
   background: var(--panel);
   backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.8);
@@ -358,6 +367,75 @@ h3 {
   display: block;
   margin-top: 0.35rem;
   color: var(--muted);
+}
+
+.bank-transfer-box,
+.transfer-request-card {
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-md);
+}
+
+.bank-transfer-title {
+  margin: 0 0 0.45rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.bank-transfer-grid,
+.transfer-request-grid {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: 1rem 0;
+}
+
+.bank-transfer-detail,
+.transfer-request-grid div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.bank-transfer-detail span,
+.transfer-request-grid span {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.bank-transfer-detail strong,
+.transfer-request-grid strong {
+  font-size: 1rem;
+  word-break: break-word;
+}
+
+.bank-transfer-detail-wide {
+  grid-column: 1 / -1;
+}
+
+.bank-transfer-form {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.bank-transfer-actions {
+  justify-content: flex-start;
+}
+
+.bank-transfer-status-box {
+  margin-top: 1rem;
+}
+
+.transfer-request-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.transfer-request-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
 }
 
 .device-shell {

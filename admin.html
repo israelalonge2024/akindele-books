@@ -72,8 +72,8 @@
               <p>Store title, author, description, category, access type, cover image, and price.</p>
             </article>
             <article class="admin-panel">
-              <h3>Payment hooks</h3>
-              <p>Premium books are ready to connect to Flutterwave with verified payment records and controlled access.</p>
+              <h3>Wema transfers</h3>
+              <p>Premium books now use manual Wema bank transfer requests, admin review, and controlled reader unlocks.</p>
             </article>
             <article class="admin-panel">
               <h3>Security-first</h3>
@@ -90,7 +90,7 @@
             <h2>Publish, edit, and manage your library.</h2>
           </div>
           <div class="topbar-actions">
-            <button class="ghost-button" id="resetDemoDataButton" type="button">Reset demo data</button>
+            <button class="ghost-button" id="resetCatalogCacheButton" type="button">Reset local cache</button>
             <button class="primary-button" id="adminLogoutButton" type="button">Sign out</button>
           </div>
         </div>
@@ -167,12 +167,12 @@
 
             <div class="form-grid">
               <label>
-                Cover image URL fallback
-                <input id="bookCoverUrl" type="url" placeholder="Optional existing cover link" />
+                Cover image URL
+                <input id="bookCoverUrl" type="url" placeholder="Existing hosted cover link" />
               </label>
               <label>
-                PDF file URL fallback
-                <input id="bookPdfUrl" type="url" placeholder="Optional existing PDF link" />
+                PDF file URL
+                <input id="bookPdfUrl" type="url" placeholder="Existing hosted PDF link" />
               </label>
             </div>
 
@@ -192,7 +192,7 @@
             </div>
 
             <div class="form-note" id="uploadHint">
-              Choose files from this device and save. Large PDFs are uploaded in chunks and can take a little longer. If you already have hosted links, you can still paste them as a fallback.
+              Choose files from this device and save. Large PDFs are uploaded in chunks and can take a little longer. If your assets are already hosted, paste the production URLs here instead of uploading again.
             </div>
             <div class="asset-confirmation hidden" id="assetConfirmation"></div>
           </form>
@@ -208,6 +208,20 @@
             <div class="empty-state hidden" id="adminEmptyState">
               <h3>No books yet.</h3>
               <p>Add the first title from the form and publish it to the public library.</p>
+            </div>
+          </div>
+
+          <div class="admin-library-card">
+            <div class="dashboard-header compact">
+              <div>
+                <p class="card-label">Payment review</p>
+                <h3>Wema bank transfer requests</h3>
+              </div>
+            </div>
+            <div class="admin-library-list" id="adminTransferRequestList"></div>
+            <div class="empty-state hidden" id="adminTransferEmptyState">
+              <h3>No transfer requests yet.</h3>
+              <p>Submitted Wema transfer requests will appear here for approval or rejection.</p>
             </div>
           </div>
         </div>

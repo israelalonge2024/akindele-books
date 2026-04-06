@@ -1,7 +1,7 @@
 window.APP_CONFIG = {
   app: {
     name: "Soul Lesson Library",
-    mode: "demo",
+    mode: "production",
   },
   firebase: {
     enabled: true,
@@ -19,10 +19,12 @@ window.APP_CONFIG = {
     unsignedUploadPreset: "luma-library",
     folder: "luma-library",
   },
-  flutterwave: {
+  bankTransfer: {
     enabled: true,
-    checkoutEndpoint: "/.netlify/functions/initialize-flutterwave",
-    verificationEndpoint: "/.netlify/functions/verify-flutterwave-transaction",
+    bankName: "Wema Bank",
+    accountNumber: "0425779321",
+    accountName: "AKIN AYINDE OLAMILEKAN",
+    currency: "NGN",
   },
   admin: {
     hiddenRoute: "/admin.html",
