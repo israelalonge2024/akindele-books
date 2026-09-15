@@ -792,6 +792,7 @@ function normalizeBookRecord(book) {
     coverUrl: book.coverUrl || "",
     pdfUrl: book.pdfUrl || "",
     pdfFileName: book.pdfFileName || "",
+    selarProductUrl: book.type === "paid" ? normalizeSelarProductUrl(book.selarProductUrl) : "",
     createdAt: book.createdAt || new Date().toISOString(),
   };
 }
@@ -895,6 +896,23 @@ function formatPrice(book) {
   }
 
   return `${book.currency || "USD"} ${book.price}`;
+}
+
+function normalizeSelarProductUrl(value) {
+  const rawValue = String(value || "").trim();
+  if (!rawValue) {
+    return "";
+  }
+
+  try {
+    const url = new URL(rawValue);
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    const isSelarDomain = hostname === "selar.com" || hostname === "selar.co";
+
+    return url.protocol === "https:" && isSelarDomain ? url.toString() : "";
+  } catch (error) {
+    return "";
+  }
 }
 
 function escapeHtml(value) {
@@ -1174,6 +1192,38 @@ function renderSubmittedTransferRequest(book, request) {
   `;
 }
 
+function buildWemaPaymentMarkup() {
+  return `
+    <div class="bank-transfer-box">
+      <p class="bank-transfer-title">Pay via Wema Bank transfer</p>
+      <p class="bank-transfer-copy">
+        We will save a payment request for this exact book and account before showing the transfer details.
+      </p>
+      <button class="payment-button" type="button" data-payment="bank-transfer">
+        View Wema transfer details
+      </button>
+    </div>
+  `;
+}
+
+function buildSelarPaymentMarkup(book) {
+  if (!book.selarProductUrl) {
+    return "";
+  }
+
+  return `
+    <div class="selar-payment-box">
+      <p class="bank-transfer-title">Pay by card via Selar</p>
+      <p class="bank-transfer-copy">
+        International card payments are completed securely on Selar. After payment, Selar gives you access to this ebook.
+      </p>
+      <a class="payment-button button-link" href="${escapeHtml(book.selarProductUrl)}" target="_blank" rel="noopener noreferrer">
+        Pay by card
+      </a>
+    </div>
+  `;
+}
+
 async function showBankTransferState(book) {
   const bank = getBankTransferConfig();
   if (!bank.enabled || !bank.accountNumber || !bank.accountName) {
@@ -1320,11 +1370,23 @@ function openBookModal(bookId) {
   const unlocked = canAccessBook(book);
 
   if (userMissing) {
-    actions.innerHTML = `
-      <button class="primary-button" type="button" data-auth-required="signin">
-        Log in to read
-      </button>
-    `;
+    if (book.type === "paid" && book.selarProductUrl) {
+      actions.innerHTML = `
+        ${buildSelarPaymentMarkup(book)}
+        <div class="payment-login-box">
+          <p class="bank-transfer-copy">Sign in to use the Wema bank transfer option or to read free books in this library.</p>
+          <button class="ghost-button" type="button" data-auth-required="signin">
+            Sign in for Wema transfer
+          </button>
+        </div>
+      `;
+    } else {
+      actions.innerHTML = `
+        <button class="primary-button" type="button" data-auth-required="signin">
+          Log in to read
+        </button>
+      `;
+    }
   } else if (unlocked) {
     actions.innerHTML = `
       <a class="primary-button button-link" href="./reader.html?id=${encodeURIComponent(book.id)}">
@@ -1333,15 +1395,8 @@ function openBookModal(bookId) {
     `;
   } else {
     actions.innerHTML = `
-      <div class="bank-transfer-box">
-        <p class="bank-transfer-title">Pay via Wema Bank transfer</p>
-        <p class="bank-transfer-copy">
-          We will save a payment request for this exact book and account before showing the transfer details.
-        </p>
-        <button class="payment-button" type="button" data-payment="bank-transfer">
-          View Wema transfer details
-        </button>
-      </div>
+      ${buildWemaPaymentMarkup()}
+      ${buildSelarPaymentMarkup(book)}
     `;
   }
 
@@ -1711,6 +1766,13 @@ function renderAdminBookList() {
                   ? `<a class="admin-asset-link" href="${escapeHtml(book.coverUrl)}" target="_blank" rel="noopener noreferrer">Saved cover URL: ${escapeHtml(book.coverUrl)}</a>`
                   : '<span class="admin-asset-link">Saved cover URL: not available yet</span>'
               }
+              ${
+                book.type === "paid"
+                  ? book.selarProductUrl
+                    ? `<a class="admin-asset-link" href="${escapeHtml(book.selarProductUrl)}" target="_blank" rel="noopener noreferrer">Selar card checkout: ready</a>`
+                    : '<span class="admin-asset-link">Selar card checkout: not added — Wema transfer only</span>'
+                  : ""
+              }
             </div>
             <div class="book-actions">
               <button class="ghost-button" type="button" data-edit-book="${book.id}">Edit</button>
@@ -1762,6 +1824,7 @@ function fillBookForm(bookId) {
   document.getElementById("bookCurrency").value = book.currency || "USD";
   document.getElementById("bookCoverUrl").value = book.coverUrl || "";
   document.getElementById("bookPdfUrl").value = book.pdfUrl || "";
+  document.getElementById("bookSelarProductUrl").value = book.selarProductUrl || "";
   document.getElementById("bookFeatured").checked = Boolean(book.featured);
   document.getElementById("bookPublished").checked = Boolean(book.published);
   document.getElementById("bookFormTitle").textContent = `Editing "${book.title}"`;
@@ -2226,6 +2289,8 @@ async function handleBookFormSubmit(event) {
   const currency = document.getElementById("bookCurrency").value.trim() || "USD";
   const coverUrlInput = document.getElementById("bookCoverUrl");
   const pdfUrlInput = document.getElementById("bookPdfUrl");
+  const selarProductUrlInput = document.getElementById("bookSelarProductUrl").value.trim();
+  const selarProductUrl = normalizeSelarProductUrl(selarProductUrlInput);
   syncDraftFilesFromInputs();
   const coverFile = state.adminDraftFiles.cover;
   const pdfFile = state.adminDraftFiles.pdf;
@@ -2237,6 +2302,11 @@ async function handleBookFormSubmit(event) {
 
   if (!title || !author || !description) {
     toast("Title, author, and description are required.");
+    return;
+  }
+
+  if (type === "paid" && selarProductUrlInput && !selarProductUrl) {
+    toast("Enter a valid secure Selar product link, such as https://selar.com/your-product-link.");
     return;
   }
 
@@ -2300,6 +2370,7 @@ async function handleBookFormSubmit(event) {
       coverUrl,
       pdfUrl,
       pdfFileName: pdfFile ? pdfFile.name : pdfUrl ? pdfUrl.split("/").pop() : "",
+      selarProductUrl: type === "paid" ? selarProductUrl : "",
       createdAt: editingBookId
         ? state.books.find((book) => book.id === editingBookId)?.createdAt || new Date().toISOString()
         : new Date().toISOString(),
@@ -2588,7 +2659,9 @@ async function setupReaderPage() {
       <p>
         ${book.type === "free"
           ? "Log in with your reader account from the library, then reopen this book."
-          : "Return to the library and complete the Wema transfer flow before opening the premium reader."}
+          : book.selarProductUrl
+            ? "Return to the library to complete the Wema transfer for reader access here, or use the Selar card option to receive this ebook through Selar."
+            : "Return to the library and complete the Wema transfer flow before opening the premium reader."}
       </p>
       <a class="primary-button button-link" href="./index.html">Return to library</a>
     `;

@@ -351,6 +351,8 @@ h3 {
 .admin-panel,
 .faq-list details,
 .bank-transfer-box,
+.selar-payment-box,
+.payment-login-box,
 .transfer-request-card {
   background: var(--panel);
   backdrop-filter: blur(24px);
@@ -370,6 +372,8 @@ h3 {
 }
 
 .bank-transfer-box,
+.selar-payment-box,
+.payment-login-box,
 .transfer-request-card {
   padding: 1rem 1.1rem;
   border-radius: var(--radius-md);
@@ -424,6 +428,24 @@ h3 {
 
 .bank-transfer-status-box {
   margin-top: 1rem;
+}
+
+.selar-payment-box,
+.payment-login-box {
+  margin-top: 1rem;
+}
+
+.payment-login-box {
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-md);
+}
+
+.form-field-note {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
 }
 
 .transfer-request-card {
